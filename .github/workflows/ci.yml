@@ -49,3 +49,33 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose down -v
+
+  perf-test:
+    # Runs after smoke-test so functional correctness is already confirmed
+    # before spending time on load — a real release gate, not just a
+    # numbers-printer: k6 exits non-zero (failing this job, and the whole
+    # pipeline) if the latency/error-rate thresholds defined in the scripts
+    # aren't met.
+    needs: smoke-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start the full stack
+        run: docker compose up --build -d
+      - name: Wait for services to be ready
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8081/healthz > /dev/null && curl -sf http://localhost:8082/healthz > /dev/null && exit 0
+            sleep 2
+          done
+          echo "services never became ready"; exit 1
+      - name: k6 — catalog-service API load test
+        run: docker run --rm --network host -v ${{ github.workspace }}/scripts/k6:/scripts grafana/k6 run /scripts/catalog-load-test.js
+      - name: k6 — end-to-end platform load test
+        run: docker run --rm --network host -v ${{ github.workspace }}/scripts/k6:/scripts grafana/k6 run /scripts/collection-flow-load-test.js
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

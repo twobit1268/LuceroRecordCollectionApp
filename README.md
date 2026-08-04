@@ -88,6 +88,20 @@ docker compose up --build -d
 docker compose down -v
 ```
 
+**Performance testing (k6)** — `scripts/k6/` has two load tests, both with real pass/fail thresholds (k6 exits non-zero if they're not met — this is a genuine CI release gate, not a numbers-printer):
+- `catalog-load-test.js` — sustained concurrent create/list traffic against catalog-service alone (10 VUs, 15s, p95 < 300ms, error rate < 1%).
+- `collection-flow-load-test.js` — the full distributed flow under concurrent load: create in catalog-service → add to collection-service (sync validation + Pub/Sub publish) → list (5 VUs, 15s, p95 < 500ms, error rate < 1%). This is the one most likely to reveal cross-service contention that a single-service load test can't see.
+
+```bash
+docker compose up --build -d
+k6 run scripts/k6/catalog-load-test.js              # brew install k6, or:
+docker run --rm --network host -v $PWD/scripts/k6:/scripts grafana/k6 run /scripts/catalog-load-test.js
+k6 run scripts/k6/collection-flow-load-test.js
+docker compose down -v
+```
+
+Runs automatically in CI as the `perf-test` job, after `smoke-test` passes (functional correctness confirmed first, then load).
+
 ## GCP deployment
 
 Built GCP-ready but **not deployed** as part of this build — no `gcloud` CLI or GCP credentials were available in the environment this was built in, and creating real cloud resources needs the account owner's own setup and billing.
