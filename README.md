@@ -121,10 +121,20 @@ cd .. && docker compose down -v
 ```bash
 docker compose up --build -d
 k6 run scripts/k6/catalog-load-test.js              # brew install k6, or:
-docker run --rm --network host -v $PWD/scripts/k6:/scripts grafana/k6 run /scripts/catalog-load-test.js
+docker run --rm --network host -v $PWD/scripts/k6:/scripts -w /scripts grafana/k6 run /scripts/catalog-load-test.js
 k6 run scripts/k6/collection-flow-load-test.js
 docker compose down -v
 ```
+
+Both scripts export `handleSummary` (`scripts/k6/lib/report.js`, shared by both) — each run produces a `<name>-summary.json` (raw metrics) and a `<name>-summary.html` (browsable report: total/failed requests, breached thresholds, per-metric charts), in addition to the usual colored text summary on stdout. Open the `.html` file directly in a browser. These are gitignored locally — see [Reports](#reports) below for where to find them from a CI run.
+
+## Reports
+
+Every CI run produces downloadable reports, not just pass/fail in the logs — from the run's page on GitHub ([Actions tab](https://github.com/twobit1268/LuceroRecordCollectionApp/actions)), scroll to the bottom for the **Artifacts** section:
+- **`playwright-report`** — the full interactive Playwright HTML report (which test ran, timing, and on failure, screenshots/traces). Uploaded on every run, pass or fail, so you can browse a green run's report too, not just debug red ones. Unzip and open `index.html`, or `npx playwright show-report <unzipped-folder>`.
+- **`k6-reports`** — the JSON + HTML report described above for both load tests, from the actual CI run's numbers (not your local machine's).
+
+Artifacts are retained 7 days (Playwright) / 30 days (k6) per the workflow config, then auto-deleted by GitHub.
 
 Runs automatically in CI as the `perf-test` job, after `smoke-test` passes (functional correctness confirmed first, then load).
 

@@ -4,6 +4,7 @@
 // gate, not just a numbers-printer.
 import http from "k6/http";
 import { check, sleep } from "k6";
+import { buildSummary } from "./lib/report.js";
 
 export const options = {
   vus: 10,
@@ -34,4 +35,8 @@ export default function () {
   check(listRes, { "list records: status 200": (r) => r.status === 200 });
 
   sleep(1);
+}
+
+export function handleSummary(data) {
+  return buildSummary("catalog-load", data);
 }

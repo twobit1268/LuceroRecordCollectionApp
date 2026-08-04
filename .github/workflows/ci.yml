@@ -103,8 +103,10 @@ jobs:
       - name: Run Playwright e2e suite
         working-directory: web
         run: npm run test:e2e
-      - name: Upload Playwright report on failure
-        if: failure()
+      - name: Upload Playwright report
+        # Always, not just on failure — lets you browse a passing run's
+        # report too, not only debug failures.
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
@@ -137,9 +139,22 @@ jobs:
           done
           echo "services never became ready"; exit 1
       - name: k6 — catalog-service API load test
-        run: docker run --rm --network host -v ${{ github.workspace }}/scripts/k6:/scripts grafana/k6 run /scripts/catalog-load-test.js
+        run: docker run --rm --network host -v ${{ github.workspace }}/scripts/k6:/scripts -w /scripts grafana/k6 run /scripts/catalog-load-test.js
       - name: k6 — end-to-end platform load test
-        run: docker run --rm --network host -v ${{ github.workspace }}/scripts/k6:/scripts grafana/k6 run /scripts/collection-flow-load-test.js
+        run: docker run --rm --network host -v ${{ github.workspace }}/scripts/k6:/scripts -w /scripts grafana/k6 run /scripts/collection-flow-load-test.js
+      - name: Upload k6 reports
+        # Always — these are HTML/JSON reports (via web/e2e-style handleSummary
+        # in scripts/k6/lib/report.js), not just logs, worth keeping for
+        # passing runs too so latency trends are browsable over time.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-reports
+          path: |
+            scripts/k6/*-summary.json
+            scripts/k6/*-summary.html
+          retention-days: 30
+          if-no-files-found: warn
       - name: Show logs on failure
         if: failure()
         run: docker compose logs
