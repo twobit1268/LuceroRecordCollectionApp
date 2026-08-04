@@ -11,7 +11,11 @@ export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? "line" : "html",
+  // In CI: "line" keeps the log readable, but "html" (default open: never)
+  // still needs to run alongside it so playwright-report/ actually gets
+  // written for the CI artifact upload — with only "line", no report
+  // directory is created at all, so there's nothing to upload.
+  reporter: process.env.CI ? [["line"], ["html", { open: "never" }]] : "html",
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:5173",
     trace: "on-first-retry",
