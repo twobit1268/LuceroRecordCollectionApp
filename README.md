@@ -121,7 +121,7 @@ cd .. && docker compose down -v
 ```bash
 docker compose up --build -d
 k6 run scripts/k6/catalog-load-test.js              # brew install k6, or:
-docker run --rm --network host -v $PWD/scripts/k6:/scripts -w /scripts grafana/k6 run /scripts/catalog-load-test.js
+docker run --rm --network host --user "$(id -u):$(id -g)" -v $PWD/scripts/k6:/scripts -w /scripts grafana/k6 run /scripts/catalog-load-test.js
 k6 run scripts/k6/collection-flow-load-test.js
 docker compose down -v
 ```

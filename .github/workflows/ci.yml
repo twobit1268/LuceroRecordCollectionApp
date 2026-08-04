@@ -139,9 +139,14 @@ jobs:
           done
           echo "services never became ready"; exit 1
       - name: k6 — catalog-service API load test
-        run: docker run --rm --network host -v ${{ github.workspace }}/scripts/k6:/scripts -w /scripts grafana/k6 run /scripts/catalog-load-test.js
+        # --user matches the container process to the runner's own UID/GID —
+        # without it, grafana/k6's own (different) non-root user can't write
+        # the handleSummary report files to this bind mount on a real Linux
+        # runner (this doesn't reproduce on Docker Desktop for Mac, which
+        # has more permissive bind-mount semantics).
+        run: docker run --rm --network host --user "$(id -u):$(id -g)" -v ${{ github.workspace }}/scripts/k6:/scripts -w /scripts grafana/k6 run /scripts/catalog-load-test.js
       - name: k6 — end-to-end platform load test
-        run: docker run --rm --network host -v ${{ github.workspace }}/scripts/k6:/scripts -w /scripts grafana/k6 run /scripts/collection-flow-load-test.js
+        run: docker run --rm --network host --user "$(id -u):$(id -g)" -v ${{ github.workspace }}/scripts/k6:/scripts -w /scripts grafana/k6 run /scripts/collection-flow-load-test.js
       - name: Upload k6 reports
         # Always — these are HTML/JSON reports (via web/e2e-style handleSummary
         # in scripts/k6/lib/report.js), not just logs, worth keeping for
