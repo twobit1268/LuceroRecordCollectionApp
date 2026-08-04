@@ -7,6 +7,10 @@ to their collection — tied to the actual code.
 
 The `web/` React app is a thin client — `src/api.ts` is a set of plain `fetch()` wrappers, no framework-specific data layer. `CatalogView` calls `catalogApi.create()` on submit; `CollectionView` calls `collectionApi.add()`. Neither view knows or cares that adding a record triggers a synchronous validation call and an asynchronous Pub/Sub publish under the hood — from the UI's perspective it's just a `POST` that resolves. That gap (a simple UI action, a much less simple distributed operation behind it) is the whole point of steps 1–4 below.
 
+## 0.5. Proving step 0 through 4 actually happen together
+
+`web/e2e/end-to-end-flow.spec.ts` is a Playwright test that does exactly the UI action described in step 0 — fills out the Catalog form, adds the record to a collection, switches to Activity — and only passes if every hop in steps 1–4 genuinely fired: catalog-service's insert, collection-service's synchronous validation call back to catalog-service, the Pub/Sub publish, activity-service's independent consume, its own synchronous enrichment call back to catalog-service, and the final render. `ActivityPage.waitForCustomerActivity()` (`web/e2e/pages/ActivityPage.ts`) clicks the Refresh button in a retry loop rather than just waiting — the Activity tab fetches once on mount and doesn't poll on its own, so a passive `waitFor` would just time out even if the async path eventually succeeded.
+
 ## 1. The record exists in catalog-service
 
 `POST /records` on catalog-service (`services/catalog/internal/httpapi/handlers.go`) validates the body (`model.Record.Validate()` — title/artist/genre required, year > 0), assigns a UUID, and inserts it into `catalog_db` via `PostgresStore.Create` (`services/catalog/internal/store/postgres.go`). Nothing distributed happens yet — this is a plain CRUD service.

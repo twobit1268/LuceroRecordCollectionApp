@@ -71,6 +71,52 @@ jobs:
         if: always()
         run: docker compose down -v
 
+  ui-test:
+    # Playwright, driving the real browser against the real containerized
+    # UI + full backend stack — the UI equivalent of smoke-test.sh. Proves
+    # the distributed flow works the way an actual user would trigger it,
+    # not just via direct API calls.
+    needs: [smoke-test, web]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+      - name: Install web deps
+        working-directory: web
+        run: npm ci
+      - name: Install Playwright browsers
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: Start the full stack
+        run: docker compose up --build -d
+      - name: Wait for services to be ready
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8081/healthz > /dev/null && curl -sf http://localhost:8082/healthz > /dev/null && curl -sf http://localhost:5173 > /dev/null && exit 0
+            sleep 2
+          done
+          echo "services never became ready"; exit 1
+      - name: Run Playwright e2e suite
+        working-directory: web
+        run: npm run test:e2e
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 7
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
   perf-test:
     # Runs after smoke-test so functional correctness is already confirmed
     # before spending time on load — a real release gate, not just a

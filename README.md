@@ -87,7 +87,7 @@ Verified end-to-end in a real browser, not just "it builds" — created a record
 
 ## Testing
 
-Two layers, both run in CI on every push:
+Four layers, all run in CI on every push:
 
 **Unit tests** — table-driven Go tests per service, using fakes for dependencies (store, HTTP clients, Pub/Sub publisher) — no live Postgres or Pub/Sub required:
 
@@ -103,6 +103,15 @@ cd services/activity && go test ./...
 docker compose up --build -d
 ./scripts/smoke-test.sh
 docker compose down -v
+```
+
+**UI end-to-end tests (Playwright)** — `web/e2e/` is the browser-driven equivalent of the smoke test above: real Chromium, real clicks, against the actual containerized UI and backend. Uses the Page Object Model (`web/e2e/pages/`) — `CatalogPage`, `CollectionPage`, `ActivityPage` — the same pattern named on the resume ("Page Factory design patterns"), just applied to this stack. Six tests: record creation, required-field validation, collection add/remove, per-customer collection scoping, and a flagship test that walks the *entire* distributed flow through the UI — create a record, add it to a collection, then wait (via `ActivityPage.waitForCustomerActivity`, a click-refresh-and-retry helper, since the Activity tab doesn't auto-poll) for it to show up genre-enriched via the async Pub/Sub path. Run 4 times in a row locally with zero flakiness before this was considered done.
+
+```bash
+docker compose up --build -d
+cd web && npx playwright install chromium   # first time only
+npm run test:e2e
+cd .. && docker compose down -v
 ```
 
 **Performance testing (k6)** — `scripts/k6/` has two load tests, both with real pass/fail thresholds (k6 exits non-zero if they're not met — this is a genuine CI release gate, not a numbers-printer):
