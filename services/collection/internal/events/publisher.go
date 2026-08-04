@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"cloud.google.com/go/pubsub"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type RecordAddedEvent struct {
@@ -37,19 +39,29 @@ func NewPubSubPublisher(ctx context.Context, projectID, topicID string) (*PubSub
 		return nil, fmt.Errorf("pubsub client: %w", err)
 	}
 
-	topic := client.Topic(topicID)
-	exists, err := topic.Exists(ctx)
+	topic, err := ensureTopic(ctx, client, topicID)
 	if err != nil {
-		return nil, fmt.Errorf("checking topic exists: %w", err)
-	}
-	if !exists {
-		topic, err = client.CreateTopic(ctx, topicID)
-		if err != nil {
-			return nil, fmt.Errorf("creating topic: %w", err)
-		}
+		return nil, err
 	}
 
 	return &PubSubPublisher{topic: topic}, nil
+}
+
+// ensureTopic creates the topic and tolerates AlreadyExists rather than
+// check-then-create (Exists() then CreateTopic()) — that pattern races
+// whenever more than one process/replica starts at the same time, which is
+// exactly what happens here: collection-service and activity-service both
+// try to set up the same topic on startup, and with multiple replicas (see
+// k8s/ manifests, replicas: 2) so could two instances of the same service.
+func ensureTopic(ctx context.Context, client *pubsub.Client, topicID string) (*pubsub.Topic, error) {
+	topic, err := client.CreateTopic(ctx, topicID)
+	if err == nil {
+		return topic, nil
+	}
+	if status.Code(err) == codes.AlreadyExists {
+		return client.Topic(topicID), nil
+	}
+	return nil, fmt.Errorf("creating topic: %w", err)
 }
 
 func (p *PubSubPublisher) PublishRecordAdded(ctx context.Context, e RecordAddedEvent) error {

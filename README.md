@@ -70,12 +70,22 @@ This starts 3 Postgres instances, the official GCP Pub/Sub emulator, and all thr
 
 ## Testing
 
-Each service has table-driven Go tests for its handler/business logic, using fakes for its dependencies (store, HTTP clients, Pub/Sub publisher) — no live Postgres or Pub/Sub required to run `go test`:
+Two layers, both run in CI on every push:
+
+**Unit tests** — table-driven Go tests per service, using fakes for dependencies (store, HTTP clients, Pub/Sub publisher) — no live Postgres or Pub/Sub required:
 
 ```bash
 cd services/catalog && go test ./...
 cd services/collection && go test ./...
 cd services/activity && go test ./...
+```
+
+**End-to-end smoke test** — `scripts/smoke-test.sh` runs against a real `docker compose up` stack and proves the actual distributed flow works, not just that each service passes its own unit tests in isolation: create a record, reject an invalid `recordId` (400), add to a collection (sync validation), wait for the async Pub/Sub event to be consumed and enriched with genre, verify genre-count stats, delete + confirm idempotent 404. This caught a real bug during development — a race condition where collection-service and activity-service (and activity-service's own replicas) could crash on startup racing to create the same Pub/Sub topic/subscription; fixed with a create-and-tolerate-`AlreadyExists` pattern instead of check-then-create.
+
+```bash
+docker compose up --build -d
+./scripts/smoke-test.sh
+docker compose down -v
 ```
 
 ## GCP deployment
