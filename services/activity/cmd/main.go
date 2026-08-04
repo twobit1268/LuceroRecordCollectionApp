@@ -53,7 +53,7 @@ func main() {
 	mux := httpapi.NewMux(server)
 
 	log.Info("activity-service listening", "port", port)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
+	if err := http.ListenAndServe(":"+port, httpapi.WithCORS(mux)); err != nil {
 		log.Error("server stopped", "error", err)
 		os.Exit(1)
 	}

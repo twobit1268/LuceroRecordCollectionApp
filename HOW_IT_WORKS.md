@@ -3,6 +3,10 @@
 A step-by-step walkthrough of one full request — a customer adding a record
 to their collection — tied to the actual code.
 
+## 0. Where the request actually comes from
+
+The `web/` React app is a thin client — `src/api.ts` is a set of plain `fetch()` wrappers, no framework-specific data layer. `CatalogView` calls `catalogApi.create()` on submit; `CollectionView` calls `collectionApi.add()`. Neither view knows or cares that adding a record triggers a synchronous validation call and an asynchronous Pub/Sub publish under the hood — from the UI's perspective it's just a `POST` that resolves. That gap (a simple UI action, a much less simple distributed operation behind it) is the whole point of steps 1–4 below.
+
 ## 1. The record exists in catalog-service
 
 `POST /records` on catalog-service (`services/catalog/internal/httpapi/handlers.go`) validates the body (`model.Record.Validate()` — title/artist/genre required, year > 0), assigns a UUID, and inserts it into `catalog_db` via `PostgresStore.Create` (`services/catalog/internal/store/postgres.go`). Nothing distributed happens yet — this is a plain CRUD service.

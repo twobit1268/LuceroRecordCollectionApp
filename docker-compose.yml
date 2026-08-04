@@ -100,3 +100,12 @@ services:
         condition: service_started
       pubsub-emulator:
         condition: service_started
+
+  web:
+    build: ./web
+    ports:
+      - "5173:80"
+    depends_on:
+      - catalog-service
+      - collection-service
+      - activity-service

@@ -4,7 +4,9 @@ A distributed, Go-based, GCP-native microservice system for tracking a
 customer's vinyl record collection. Built as a hands-on Go + GCP portfolio
 piece — three independent services, real Postgres-per-service data
 ownership, synchronous REST between services, and asynchronous GCP Pub/Sub
-messaging, all containerized and verified end-to-end locally.
+messaging, all containerized and verified end-to-end locally. A small React
++ TypeScript UI sits on top, driving the same distributed flow a real user
+would.
 
 See [HOW_IT_WORKS.md](./HOW_IT_WORKS.md) for a step-by-step walkthrough of
 the full request flow across all three services.
@@ -38,8 +40,7 @@ Each service owns its own Postgres database — no shared schema, no direct cros
 ## Deliberate scope decisions
 
 - **REST/JSON everywhere**, not gRPC — keeps this testable with the same tools already in use elsewhere (Postman/REST Assured) and keeps scope reasonable. gRPC for internal calls is a natural extension.
-- **No auth/customer-identity service** — `customerId` is a plain string in requests. No API gateway/BFF — each service exposes its own port directly. Both are clear, stated extension points, not oversights.
-- **No frontend** — this is the backend distributed system that was actually requested.
+- **No auth/customer-identity service** — `customerId` is a plain string in requests. No API gateway/BFF — the UI calls all three services directly by their own ports, and CORS is wide open (`Access-Control-Allow-Origin: *`) rather than scoped to the UI's actual origin. Both are clear, stated extension points for a local-dev-only tool, not production practice.
 - **Pub/Sub publish is non-fatal** on failure in collection-service (the collection entry is already durably persisted even if the event publish fails) — a production system would harden this with a transactional outbox pattern; noted here rather than implemented, to keep scope honest.
 
 ## Setup
@@ -50,7 +51,7 @@ Requires Go 1.26+, Docker, and Docker Compose. No GCP account or `gcloud` CLI ne
 docker compose up --build
 ```
 
-This starts 3 Postgres instances, the official GCP Pub/Sub emulator, and all three services. The `cloud.google.com/go/pubsub` client code is identical whether it's talking to the emulator (via `PUBSUB_EMULATOR_HOST`) or real GCP Pub/Sub — no code fork between environments.
+This starts 3 Postgres instances, the official GCP Pub/Sub emulator, all three services, and the web UI at `http://localhost:5173`. The `cloud.google.com/go/pubsub` client code is identical whether it's talking to the emulator (via `PUBSUB_EMULATOR_HOST`) or real GCP Pub/Sub — no code fork between environments.
 
 ## API reference
 
@@ -67,6 +68,22 @@ This starts 3 Postgres instances, the official GCP Pub/Sub emulator, and all thr
 **activity-service** (`:8083`)
 - `GET /activity/feed?limit=20` — recent collection activity across all customers, enriched with genre
 - `GET /activity/genres` — genre counts across all consumed events
+
+## Web UI
+
+`web/` is a small React + TypeScript (Vite) app with three tabs — Catalog (browse/create records), Collection (pick a customer, add records to their collection), Activity (the genre-enriched feed, so you can watch the async Pub/Sub path resolve in real time). It talks to all three services directly over plain `fetch()` calls; no state management library, no router (tab switching is just component state) — deliberately minimal.
+
+Two ways to run it:
+
+```bash
+# Dev server, against services running however you started them:
+cd web && npm install && npm run dev   # http://localhost:5173
+
+# Or as part of the full containerized stack:
+docker compose up --build   # nginx-served build, also at :5173
+```
+
+Verified end-to-end in a real browser, not just "it builds" — created a record, added it to a collection (exercising the sync catalog-service validation call), and confirmed it showed up in the Activity tab correctly enriched with genre after the async Pub/Sub round-trip, both against the dev server and the Dockerized nginx build.
 
 ## Testing
 

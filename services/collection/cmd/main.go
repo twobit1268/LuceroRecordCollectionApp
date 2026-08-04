@@ -44,7 +44,7 @@ func main() {
 	mux := httpapi.NewMux(server)
 
 	log.Info("collection-service listening", "port", port, "catalogServiceURL", catalogURL)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
+	if err := http.ListenAndServe(":"+port, httpapi.WithCORS(mux)); err != nil {
 		log.Error("server stopped", "error", err)
 		os.Exit(1)
 	}
