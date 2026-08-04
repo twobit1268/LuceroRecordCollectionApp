@@ -28,6 +28,41 @@ activity-service has no knowledge of collection-service's existence — it only 
 
 `GET /activity/feed` and `GET /activity/genres` on activity-service just read from `activity_db` — `RecentFeed` (most recent entries, `LIMIT`-bounded) and `GenreCounts` (a `GROUP BY genre` aggregate). Both are proof that the async path actually worked: if an entry a customer just added shows up here, the whole chain — sync validation, persistence, publish, subscribe, enrichment, persistence again — really executed, not just individual services in isolation.
 
+## A real concurrency bug this caught: the Pub/Sub topic/subscription race
+
+This isn't a hypothetical "here's a bug I could imagine" — it actually happened while building this, and it's worth documenting in detail because it's a genuine distributed-systems failure mode, not a typo.
+
+**Symptom:** `docker compose up` would sometimes bring up `activity-service` in a crash loop with:
+```
+{"level":"ERROR","msg":"failed to set up pubsub subscriber","error":"creating topic: rpc error: code = AlreadyExists desc = Topic already exists"}
+```
+
+**Root cause:** both `collection-service` and `activity-service` set up the same Pub/Sub topic on startup, using the obvious-looking pattern:
+```go
+exists, _ := topic.Exists(ctx)
+if !exists {
+    topic, err = client.CreateTopic(ctx, topicID)
+}
+```
+This is a **check-then-act race** (a TOCTOU bug — time-of-check to time-of-use). When two processes start at roughly the same time, both call `Exists()`, both get `false`, both call `CreateTopic()` — one succeeds, the other gets an `AlreadyExists` error and, in the original code, treated that as fatal and crashed.
+
+**Why it's more than a two-service coincidence:** the same race exists on the *subscription* side inside `activity-service` alone. The `k8s/activity-deployment.yaml` manifest sets `replicas: 2` — meaning in a real GKE deployment, two pods of the *same service* would race to create the same subscription on a rolling restart or scale-up, hitting this exact bug in production, not just at the two-service boundary this demo happens to have.
+
+**Fix** (`services/collection/internal/events/publisher.go`, `services/activity/internal/events/subscriber.go`): replace check-then-create with **create-and-tolerate-`AlreadyExists`**:
+```go
+topic, err := client.CreateTopic(ctx, topicID)
+if err == nil {
+    return topic, nil
+}
+if status.Code(err) == codes.AlreadyExists {
+    return client.Topic(topicID), nil // someone else made it — that's fine, use it
+}
+return nil, fmt.Errorf("creating topic: %w", err)
+```
+This collapses the race window to zero: there's no gap between checking and acting, because the "check" *is* the act, and the only two outcomes (I created it / someone else already did) are both handled as success.
+
+**How it was actually caught:** not by code review, and not by the unit tests (which use fakes and never touch a real Pub/Sub topic) — by `scripts/smoke-test.sh` running against the *real* `docker compose` stack, exactly the class of bug that only shows up when independently-starting real processes actually race against each other. This is the same argument for why the CI `smoke-test` job exists as a separate stage from unit tests: unit tests with fakes prove the logic is right in isolation, but concurrency bugs between real processes require actually running them concurrently to find.
+
 ## Why three services, not one
 
 The two communication patterns (sync REST validation, async Pub/Sub fan-out) only mean something if they cross a real process/deployment boundary — a single monolith calling its own functions wouldn't demonstrate anything about distributed-systems failure modes (a validator call that times out, a Pub/Sub message that needs a retry). Each service also owns its own Postgres database rather than sharing one schema — the actual "microservices" pattern, and the reason `docker-compose.yml` runs three separate Postgres containers instead of one shared instance.
