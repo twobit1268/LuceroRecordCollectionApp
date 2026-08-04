@@ -1,0 +1,70 @@
+# Deploy target: GKE. GCP_PROJECT_ID here should be your REAL GCP project —
+# in production this points collection-service at the actual Pub/Sub topic,
+# no PUBSUB_EMULATOR_HOST is set (unlike the local Docker Compose setup),
+# so the same pubsub client code talks to real GCP Pub/Sub unmodified.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: collection-service-config
+data:
+  PORT: "8082"
+  CATALOG_SERVICE_URL: "http://catalog-service:8081"
+  GCP_PROJECT_ID: "your-real-gcp-project-id"
+  PUBSUB_TOPIC: "collection-events"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collection-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: collection-service
+  template:
+    metadata:
+      labels:
+        app: collection-service
+    spec:
+      containers:
+        - name: collection-service
+          image: REGION-docker.pkg.dev/PROJECT_ID/vinylvault/collection-service:latest
+          ports:
+            - containerPort: 8082
+          envFrom:
+            - configMapRef:
+                name: collection-service-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: collection-db-credentials
+                  key: database-url
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8082
+            initialDelaySeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8082
+            initialDelaySeconds: 10
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: collection-service
+spec:
+  selector:
+    app: collection-service
+  ports:
+    - port: 8082
+      targetPort: 8082
