@@ -1,6 +1,7 @@
 services/*/vinylvault-*
 *.log
 .env
+.idea/
 web/node_modules
 web/dist
 scripts/k6/*-summary.json
