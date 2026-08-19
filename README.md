@@ -144,7 +144,7 @@ Built GCP-ready but **not deployed** as part of this build — no `gcloud` CLI o
 
 What's ready to deploy:
 - **Dockerfiles** — multi-stage builds, Cloud Run– and GKE-compatible as-is.
-- **`k8s/`** — Deployment + Service + ConfigMap per service, targeting GKE (matching how Bet365 actually runs their Verification platform). Image paths use an Artifact Registry placeholder (`REGION-docker.pkg.dev/PROJECT_ID/vinylvault/...`); `DATABASE_URL` is deliberately left out of the ConfigMaps and wired to a Kubernetes Secret instead, since it's never something to commit.
+- **`k8s/`** — Deployment + Service + ConfigMap per service, targeting GKE. Image paths use an Artifact Registry placeholder (`REGION-docker.pkg.dev/PROJECT_ID/vinylvault/...`); `DATABASE_URL` is deliberately left out of the ConfigMaps and wired to a Kubernetes Secret instead, since it's never something to commit.
 - **Pub/Sub code** — same client, same code path; production just points `GCP_PROJECT_ID` at a real project and omits `PUBSUB_EMULATOR_HOST`.
 
 Roughly what deploying for real would involve: `gcloud sql instances create` (or Cloud SQL per service), `gcloud pubsub topics create collection-events`, `gcloud artifacts repositories create` + `docker push` per service image, then `kubectl apply -f k8s/` against a GKE cluster with the secrets pre-created.
