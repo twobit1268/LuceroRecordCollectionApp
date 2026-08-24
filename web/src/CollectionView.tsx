@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { catalogApi, collectionApi, type AlbumRecord, type CollectionEntry } from "./api";
+import { Flags } from "./flags";
+import { useFlag } from "./useFlag";
 
 export default function CollectionView() {
   const [customerId, setCustomerId] = useState("demo-customer");
@@ -8,6 +10,7 @@ export default function CollectionView() {
   const [selectedRecordId, setSelectedRecordId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const exportCsv = useFlag(Flags.export_csv);
 
   async function loadCatalog() {
     try {
@@ -33,14 +36,8 @@ export default function CollectionView() {
     }
   }
 
-  useEffect(() => {
-    loadCatalog();
-  }, []);
-
-  useEffect(() => {
-    loadCollection();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customerId]);
+  useEffect(() => { loadCatalog(); }, []);
+  useEffect(() => { loadCollection(); }, [customerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -69,29 +66,43 @@ export default function CollectionView() {
     return record ? `${record.title} — ${record.artist}` : recordId;
   }
 
+  function handleExportCsv() {
+    const header = 'Record,Added\n';
+    const rows = entries.map((e) => `"${recordLabel(e.recordId)}","${new Date(e.addedAt).toLocaleString()}"`).join('\n');
+    const blob = new Blob([header + rows], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${customerId}-collection.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <section>
-      <h2>Collection</h2>
+      <h2>
+        Collection
+        {exportCsv && <span className="flag-badge">⬇ Export CSV (CloudBees flag)</span>}
+      </h2>
 
       <div className="row-form">
         <label>
           Customer ID{" "}
           <input value={customerId} onChange={(e) => setCustomerId(e.target.value)} />
         </label>
+        {exportCsv && entries.length > 0 && (
+          <button onClick={handleExportCsv} className="export-btn">Export CSV</button>
+        )}
       </div>
 
       <form onSubmit={handleAdd} className="row-form">
         <select value={selectedRecordId} onChange={(e) => setSelectedRecordId(e.target.value)}>
           {catalog.length === 0 && <option value="">No records in catalog yet</option>}
           {catalog.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.title} — {r.artist}
-            </option>
+            <option key={r.id} value={r.id}>{r.title} — {r.artist}</option>
           ))}
         </select>
-        <button type="submit" disabled={!selectedRecordId}>
-          Add to collection
-        </button>
+        <button type="submit" disabled={!selectedRecordId}>Add to collection</button>
       </form>
 
       {error && <p className="error">{error}</p>}
@@ -114,9 +125,7 @@ export default function CollectionView() {
                 <td>{recordLabel(e.recordId)}</td>
                 <td>{new Date(e.addedAt).toLocaleString()}</td>
                 <td>
-                  <button onClick={() => handleRemove(e.id)} className="link-button">
-                    Remove
-                  </button>
+                  <button onClick={() => handleRemove(e.id)} className="link-button">Remove</button>
                 </td>
               </tr>
             ))}

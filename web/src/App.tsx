@@ -2,6 +2,8 @@ import { useState } from "react";
 import CatalogView from "./CatalogView";
 import CollectionView from "./CollectionView";
 import ActivityView from "./ActivityView";
+import { Flags } from "./flags";
+import { useFlag } from "./useFlag";
 import "./App.css";
 
 type Tab = "catalog" | "collection" | "activity";
@@ -14,12 +16,14 @@ const TABS: { id: Tab; label: string }[] = [
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("catalog");
+  const darkMode = useFlag(Flags.dark_mode);
 
   return (
-    <div className="app">
+    <div className={`app${darkMode ? " dark" : ""}`}>
       <header>
         <h1>VinylVault</h1>
         <p className="subtitle">Distributed Go/GCP record-collection microservices</p>
+        {darkMode && <span className="flag-badge">🌙 Dark Mode (CloudBees flag)</span>}
       </header>
 
       <nav>

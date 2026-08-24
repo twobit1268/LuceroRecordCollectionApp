@@ -102,7 +102,10 @@ services:
         condition: service_started
 
   web:
-    build: ./web
+    build:
+      context: ./web
+      args:
+        VITE_CLOUDBEES_SDK_KEY: e5157abd-6006-4a36-98ff-863eb7475176
     ports:
       - "5173:80"
     depends_on:
