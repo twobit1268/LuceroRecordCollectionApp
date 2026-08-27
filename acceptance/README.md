@@ -25,7 +25,8 @@ cd .. && docker compose down -v
 ```
 
 Requires **JDK 17+** and **Maven 3.9+**. First run downloads the test
-dependencies.
+dependencies. `asdf` / `mise` users can get the toolchain from
+[`.tool-versions`](./.tool-versions) with `mise install` (or `asdf install`).
 
 ### Useful variations
 
