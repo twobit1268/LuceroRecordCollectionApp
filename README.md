@@ -87,7 +87,7 @@ Verified end-to-end in a real browser, not just "it builds" — created a record
 
 ## Testing
 
-Four layers, all run in CI on every push:
+Five layers, all run in CI on every push:
 
 **Unit tests** — table-driven Go tests per service, using fakes for dependencies (store, HTTP clients, Pub/Sub publisher) — no live Postgres or Pub/Sub required:
 
@@ -114,6 +114,14 @@ npm run test:e2e
 cd .. && docker compose down -v
 ```
 
+**BDD acceptance tests (Cucumber + REST Assured)** — `acceptance/` is the Java equivalent of `scripts/smoke-test.sh`: the same distributed flow — synchronous catalog validation plus the asynchronous Pub/Sub genre-enrichment path — but written as Gherkin scenarios (`Feature` / `Background` / `Scenario` / `Scenario Outline`), driven over HTTP with REST Assured, and executed by Cucumber-JVM on the JUnit 5 Platform. Step definitions share state through a PicoContainer-injected "World" (`TestConfig` + `ScenarioContext`); a `@Before` hook waits for `/healthz` on all three services; the async assertions poll with Awaitility rather than sleeping. Three feature files (`@catalog`, `@collection`, `@distributed @smoke`). This is the same acceptance scenario as the bash smoke test and the Playwright flow spec, expressed a third way — the layer a BDD-oriented team would let non-engineers read and help write. Requires JDK 17+ and Maven. See [`acceptance/README.md`](./acceptance/README.md).
+
+```bash
+docker compose up --build -d catalog-db collection-db activity-db pubsub-emulator catalog-service collection-service activity-service
+cd acceptance && mvn test           # -Dcucumber.filter.tags="@smoke" to run just the end-to-end flow
+cd .. && docker compose down -v
+```
+
 **Performance testing (k6)** — `scripts/k6/` has two load tests, both with real pass/fail thresholds (k6 exits non-zero if they're not met — this is a genuine CI release gate, not a numbers-printer):
 - `catalog-load-test.js` — sustained concurrent create/list traffic against catalog-service alone (10 VUs, 15s, p95 < 300ms, error rate < 1%).
 - `collection-flow-load-test.js` — the full distributed flow under concurrent load: create in catalog-service → add to collection-service (sync validation + Pub/Sub publish) → list (5 VUs, 15s, p95 < 500ms, error rate < 1%). This is the one most likely to reveal cross-service contention that a single-service load test can't see.
@@ -132,9 +140,10 @@ Both scripts export `handleSummary` (`scripts/k6/lib/report.js`, shared by both)
 
 Every CI run produces downloadable reports, not just pass/fail in the logs — from the run's page on GitHub ([Actions tab](https://github.com/twobit1268/LuceroRecordCollectionApp/actions)), scroll to the bottom for the **Artifacts** section:
 - **`playwright-report`** — the full interactive Playwright HTML report (which test ran, timing, and on failure, screenshots/traces). Uploaded on every run, pass or fail, so you can browse a green run's report too, not just debug red ones. Unzip and open `index.html`, or `npx playwright show-report <unzipped-folder>`.
+- **`cucumber-report`** — the Cucumber acceptance-suite report: `cucumber.html` (browsable — which scenarios/steps ran and their timing), plus `cucumber.json` and JUnit `cucumber.xml` for tooling. Uploaded on every run.
 - **`k6-reports`** — the JSON + HTML report described above for both load tests, from the actual CI run's numbers (not your local machine's).
 
-Artifacts are retained 7 days (Playwright) / 30 days (k6) per the workflow config, then auto-deleted by GitHub.
+Artifacts are retained 7 days (Playwright / Cucumber) / 30 days (k6) per the workflow config, then auto-deleted by GitHub.
 
 Runs automatically in CI as the `perf-test` job, after `smoke-test` passes (functional correctness confirmed first, then load).
 

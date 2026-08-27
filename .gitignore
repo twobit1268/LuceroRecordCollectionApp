@@ -6,3 +6,4 @@ web/node_modules
 web/dist
 scripts/k6/*-summary.json
 scripts/k6/*-summary.html
+acceptance/target/
