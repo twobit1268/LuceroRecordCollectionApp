@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.vinylvault</groupId>
+    <artifactId>acceptance</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>VinylVault acceptance tests</name>
+    <description>
+        BDD acceptance suite for the VinylVault distributed system, written with
+        Cucumber-JVM + REST Assured. This is the Java equivalent of
+        scripts/smoke-test.sh and web/e2e/end-to-end-flow.spec.ts: it drives the
+        three services over HTTP and asserts both the synchronous catalog
+        validation path and the asynchronous Pub/Sub genre-enrichment path,
+        end to end, against a running `docker compose up` stack.
+    </description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>17</maven.compiler.release>
+
+        <cucumber.version>7.20.1</cucumber.version>
+        <junit.version>5.11.3</junit.version>
+        <junit.platform.suite.version>1.11.3</junit.platform.suite.version>
+        <rest-assured.version>5.5.0</rest-assured.version>
+        <awaitility.version>4.2.2</awaitility.version>
+        <assertj.version>3.26.3</assertj.version>
+        <jackson.version>2.18.1</jackson.version>
+        <surefire.version>3.5.2</surefire.version>
+
+        <!-- Override on the command line, e.g.
+             mvn test -Dcucumber.filter.tags="@catalog and not @wip"
+             Empty means "run every scenario". -->
+        <cucumber.filter.tags></cucumber.filter.tags>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- One import per test framework keeps the individual artifact
+                 versions consistent without repeating them below. -->
+            <dependency>
+                <groupId>io.cucumber</groupId>
+                <artifactId>cucumber-bom</artifactId>
+                <version>${cucumber.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Cucumber: Gherkin parser + Java step-definition glue. -->
+        <dependency>
+            <groupId>io.cucumber</groupId>
+            <artifactId>cucumber-java</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Runs .feature files as a JUnit Platform "cucumber" test engine,
+             so `mvn test` / Surefire / the IDE all just work. -->
+        <dependency>
+            <groupId>io.cucumber</groupId>
+            <artifactId>cucumber-junit-platform-engine</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Dependency injection for the "World": PicoContainer hands the same
+             TestConfig + ScenarioContext instances to every step class in a
+             scenario, and a fresh pair for the next scenario. -->
+        <dependency>
+            <groupId>io.cucumber</groupId>
+            <artifactId>cucumber-picocontainer</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.platform</groupId>
+            <artifactId>junit-platform-suite</artifactId>
+            <version>${junit.platform.suite.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- HTTP client + JSON assertions for the step definitions. -->
+        <dependency>
+            <groupId>io.rest-assured</groupId>
+            <artifactId>rest-assured</artifactId>
+            <version>${rest-assured.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Polling with a timeout, for the async Pub/Sub path (activity feed
+             only becomes consistent a few seconds after the collection add). -->
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <version>${awaitility.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>${assertj.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${surefire.version}</version>
+                <configuration>
+                    <!-- The suite class is the single entry point; the cucumber
+                         engine discovers the .feature files under it. -->
+                    <includes>
+                        <include>**/RunCucumberTest.java</include>
+                    </includes>
+                    <!-- Pass `-Dcucumber.filter.tags="@smoke"` etc. straight
+                         through to the engine. -->
+                    <systemPropertyVariables>
+                        <cucumber.filter.tags>${cucumber.filter.tags}</cucumber.filter.tags>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

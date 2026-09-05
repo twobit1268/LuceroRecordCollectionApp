@@ -71,6 +71,42 @@ jobs:
         if: always()
         run: docker compose down -v
 
+  acceptance-test:
+    # Cucumber-JVM + REST Assured BDD suite — the Java equivalent of
+    # smoke-test.sh. Same distributed flow (sync catalog validation + async
+    # Pub/Sub genre enrichment), expressed as Gherkin scenarios. Runs against
+    # the API layer only, so it skips building the UI image.
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: acceptance/pom.xml
+      - name: Start the backend stack
+        run: docker compose up --build -d catalog-db collection-db activity-db pubsub-emulator catalog-service collection-service activity-service
+      - name: Run Cucumber acceptance suite
+        working-directory: acceptance
+        run: mvn --batch-mode --no-transfer-progress test
+      - name: Upload Cucumber report
+        # Always — browse a green run's report too, not just failures.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cucumber-report
+          path: acceptance/target/cucumber-report/
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
   ui-test:
     # Playwright, driving the real browser against the real containerized
     # UI + full backend stack — the UI equivalent of smoke-test.sh. Proves
